@@ -10,11 +10,16 @@ var (
 	ErrNotExpr = errors.New("the expression is not a mathmatical one")
 )
 
+const (
+    O_RETURN = iota
+    O_ADD
+    O_MULTIPLE
+)
+
 type Expr struct {
-	Operator byte
+	Operator int
 	Operands []*Expr
 	Value    int64
-	Parent   *Expr
 
 	data       []byte
 	commaStack []int
@@ -59,13 +64,13 @@ func (e *Expr) Parse() error {
 				//now in a subexpression
 				continue
 			}
-			if e.Operator == '*' {
+			if e.Operator == O_MULTIPLE {
 				/* a '*' was met before, the subExps stores the operands of a multiplication, now treat them as a whole subexpression */
 				subExps = [][]byte{e.data[:i]}
 			} else {
 				subExps = append(subExps, e.data[prev:i])
 			}
-			e.Operator = '+'
+			e.Operator = O_ADD
 			prev = int64(i + 1)
 		case '*':
 			if i == 0 || i == len(e.data)-1 {
@@ -75,12 +80,12 @@ func (e *Expr) Parse() error {
 				//now in a subexpression
 				continue
 			}
-			/* a '+' was met before, so this multiplication should be a sub-expression */
-			if e.Operator == '+' {
+			/* a '+' has been met before, so this multiplication should be a sub-expression */
+			if e.Operator == O_ADD {
 				continue
 			}
 			subExps = append(subExps, e.data[prev:i])
-			e.Operator = '*'
+			e.Operator = O_MULTIPLE
 			prev = int64(i + 1)
 		}
 	}
@@ -94,7 +99,7 @@ func (e *Expr) Parse() error {
 		e.data = e.data[1 : len(e.data)-1]
 		return e.Parse()
 	}
-	if e.Operator == byte(0) { //no operator found, this expression contains only number
+	if e.Operator == O_RETURN { //no operator found, this expression contains only number
 		e.Value, _ = strconv.ParseInt(string(e.data), 10, 64)
 		return nil
 	}
@@ -110,22 +115,15 @@ func (e *Expr) Parse() error {
 }
 
 func (e *Expr) Calculate() (out int64) {
-	if e.Value > 0 {
-		return e.Value
-	}
-	if len(e.Operands) == 0 {
-		return 0
-	} else if len(e.Operands) == 1 {
-		return e.Operands[0].Calculate()
-	}
-
 	switch e.Operator {
-	case '+':
+    case O_RETURN:
+        return e.Value
+    case O_ADD:
 		for i := 0; i < len(e.Operands); i++ {
 			out += e.Operands[i].Calculate()
 		}
 		return
-	case '*':
+	case O_MULTIPLE:
 		out = 1
 		for i := 0; i < len(e.Operands); i++ {
 			out *= e.Operands[i].Calculate()
